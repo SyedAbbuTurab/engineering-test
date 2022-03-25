@@ -114,8 +114,14 @@ export class GroupController {
       .innerJoin(GroupStudent, "group_student", "student.id = group_student.student_id")
       .where("group_student.group_id = :id", { id: request.params.id })
       .getMany()
-
-    return getStudentsInGroup
+    const studentsInGroups = getStudentsInGroup.map((student) => {
+      return {
+        id: student.id,
+        full_name: `${student.first_name} ${student.last_name}`,
+        photo_url: student.photo_url
+      }
+    })
+    return studentsInGroups
   }
 
   private async addStudentToGroup(id: number, queryResult: QueryResult[]) {
