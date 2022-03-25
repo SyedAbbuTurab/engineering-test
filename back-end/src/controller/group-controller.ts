@@ -4,11 +4,17 @@ import { Group } from "../entity/group.entity"
 import { CreateGroupInput, UpdateGroupInput } from "../interface/group.interface"
 import { GroupStudent } from "../entity/group-student.entity"
 import { Student } from "../entity/student.entity"
+import { CreateGroupStudentInput } from "../interface/group-student.interface"
+import { QueryResult } from "../interface/query-result.interface"
+import { StudentRollState } from "../entity/student-roll-state.entity"
+import { Roll } from "../entity/roll.entity"
+import { getStartEndDates, getRollStatesConditionString } from "../library/util"
 
 export class GroupController {
   private groupRepository = getRepository(Group)
   private groupStudentRepository = getRepository(GroupStudent)
   private studentRepository = getRepository(Student)
+  private studentRollStateRepository = getRepository(StudentRollState)
 
   async allGroups(request: Request, response: Response, next: NextFunction) {
     // Task 1:
@@ -112,10 +118,68 @@ export class GroupController {
     return getStudentsInGroup
   }
 
+  private async addStudentToGroup(id: number, queryResult: QueryResult[]) {
+    queryResult.forEach(async (student: QueryResult) => {
+      const createGroupStudentInput: CreateGroupStudentInput = {
+        student_id: student.student_id,
+        group_id: id,
+        incident_count: student.incident_count,
+      }
+
+      const groupStudent = new GroupStudent()
+      groupStudent.prepareToCreate(createGroupStudentInput)
+      await this.groupStudentRepository.save(groupStudent)
+    })
+  }
+
+  private async updateMetaData(id: number, studentCount: number) {
+    // Update metadata
+    const y = await this.groupRepository.save({
+      id: id,
+      run_at: new Date(),
+      student_count: studentCount,
+    })
+  }
+
   async runGroupFilters(request: Request, response: Response, next: NextFunction) {
     // Task 2:
     // 1. Clear out the groups (delete all the students from the groups)
     // 2. For each group, query the student rolls to see which students match the filter for the group
     // 3. Add the list of students that match the filter to the group
+    try {
+      await this.groupStudentRepository.clear()
+
+      let allGroups = await this.groupRepository.find()
+      allGroups.forEach(async (group) => {
+        // query result will contain the student id and the number of incidents that student has matched with the current group
+
+        const { startDate, endDate } = getStartEndDates(group.number_of_weeks)
+        const conditionString = getRollStatesConditionString(group.roll_states)
+
+        let queryResult: QueryResult[] = await this.studentRollStateRepository
+          .createQueryBuilder("student_roll_state")
+          .select("student_id")
+          .addSelect("COUNT(student_roll_state.student_id) AS incident_count")
+          .innerJoin(Roll, "roll", "student_roll_state.roll_id = roll.id")
+          .where("roll.completed_at BETWEEN :startDate AND :endDate", { startDate, endDate })
+          .andWhere(conditionString)
+          .groupBy("student_roll_state.student_id")
+          .having(`incident_count ${group.ltmt} :incidents`, { incidents: group.incidents })
+          .getRawMany()
+
+        console.log("Group ID", group.id, "Results", queryResult)
+        // adding the result of the query to the group_student table
+        await this.addStudentToGroup(group.id, queryResult)
+
+        // updating the meta data fields in the group table for the current group. student count is length of the query result
+        await this.updateMetaData(group.id, queryResult.length)
+      })
+      response.send("Group filters finished running")
+    } catch (error) {
+      console.error("ERROR_REMOVE_GROUP", error)
+      return {
+        Messsage: "Internal server error",
+      }
+    }
   }
 }
