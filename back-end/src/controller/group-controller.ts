@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express"
 import { getRepository } from "typeorm"
 import { Group } from "../entity/group.entity"
+import { CreateGroupInput } from "../interface/group.interface"
 
 export class GroupController {
   private groupRepository = getRepository(Group)
@@ -13,8 +14,29 @@ export class GroupController {
 
   async createGroup(request: Request, response: Response, next: NextFunction) {
     // Task 1: 
-    
     // Add a Group
+    try {
+      const { body: payload } = request
+
+      const createGroupInput: CreateGroupInput = {
+        name: payload.name,
+        number_of_weeks: payload.number_of_weeks,
+        roll_states: payload.roll_states,
+        incidents: payload.incidents,
+        ltmt: payload.ltmt,
+      }
+      const group = new Group()
+      group.prepareToCreate(createGroupInput)
+      const groupResponse = await this.groupRepository.save(group)
+      return {
+        statusCode: 200,
+        message: "Created group",
+        Data: groupResponse,
+      }
+    } catch (error) {
+      console.error("ERROR_CREATE_GROUP", error)
+      return { code: 500, message: "Internal server error", error }
+    }
   }
 
   async updateGroup(request: Request, response: Response, next: NextFunction) {
