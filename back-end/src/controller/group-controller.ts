@@ -2,9 +2,13 @@ import { NextFunction, Request, Response } from "express"
 import { getRepository } from "typeorm"
 import { Group } from "../entity/group.entity"
 import { CreateGroupInput, UpdateGroupInput } from "../interface/group.interface"
+import { GroupStudent } from "../entity/group-student.entity"
+import { Student } from "../entity/student.entity"
 
 export class GroupController {
   private groupRepository = getRepository(Group)
+  private groupStudentRepository = getRepository(GroupStudent)
+  private studentRepository = getRepository(Student)
 
   async allGroups(request: Request, response: Response, next: NextFunction) {
     // Task 1:
@@ -99,6 +103,13 @@ export class GroupController {
   async getGroupStudents(request: Request, response: Response, next: NextFunction) {
     // Task 1:
     // Return the list of Students that are in a Group
+    const getStudentsInGroup = await this.studentRepository
+      .createQueryBuilder("student")
+      .innerJoin(GroupStudent, "group_student", "student.id = group_student.student_id")
+      .where("group_student.group_id = :id", { id: request.params.id })
+      .getMany()
+
+    return getStudentsInGroup
   }
 
   async runGroupFilters(request: Request, response: Response, next: NextFunction) {

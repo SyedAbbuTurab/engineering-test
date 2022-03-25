@@ -105,4 +105,10 @@ export const Routes = [
     controller: GroupController,
     action: "removeGroup",
   },
+  {
+    method: "get",
+    route: "/group/students/:id",
+    controller: GroupController,
+    action: "getGroupStudents",
+  },
 ]
